@@ -171,7 +171,7 @@ class TransformerLatexDecoder(nn.Module):
         self.norm = nn.LayerNorm(d_model)
 
         self.output_proj = nn.Linear(d_model, vocab_size, bias=False)
-        # Weight tying often improves LM-style decoders and lowers params.
+        # Reuse the same embedding matrix as before to make the model more efficient overall
         self.output_proj.weight = self.token_embed.weight
 
     # Make sure that the transformer can't attend to tokens that are too ahead yet! So add a triangular matrix filled with neg. infinities.
@@ -197,6 +197,7 @@ class TransformerLatexDecoder(nn.Module):
         tgt = self.token_embed(decoder_input_ids) + self.pos_embed(pos_ids)
         tgt = self.input_dropout(tgt)
 
+        # Apply a causal (meaning tokens cannot attend to ones ahead of it) mask to the autoregressive decoder
         tgt_mask = self._causal_mask(tgt_len, device=decoder_input_ids.device)
         tgt_key_padding_mask = decoder_input_ids.eq(self.pad_id)
 
@@ -233,6 +234,7 @@ class TransformerLatexDecoder(nn.Module):
             generated = torch.cat([generated, next_token.unsqueeze(1)], dim=1)
             finished = finished | next_token.eq(eos_id)
 
+            # Also: if all sequences have already produced <EOS>, then just exit early, of course
             if bool(finished.all().item()):
                 break
 
